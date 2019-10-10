@@ -1,5 +1,5 @@
 from flask import *
-from flask_mysqldb import MySQL
+from flaskext.mysql import MySQL
 import mysql, hashlib, os
 from werkzeug.utils import secure_filename
 
