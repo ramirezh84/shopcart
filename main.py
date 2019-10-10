@@ -13,6 +13,7 @@ app.config['MYSQL_DATABASE_USER'] = 'admin'
 app.config['MYSQL_DATABASE_PASSWORD'] = '1ns2deout'
 app.config['MYSQL_DATABASE_DB'] = 'database'
 app.config['MYSQL_DATABASE_HOST'] = 'devstack3-dbcluster-xp4up3zn8jhh.cluster-czlpjerozeu2.us-east-1.rds.amazonaws.com'
+mysql.init_app(app)
 
 mysql = MySQL(app)
 
