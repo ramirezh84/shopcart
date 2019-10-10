@@ -11,7 +11,7 @@ ALLOWED_EXTENSIONS = set(['jpeg', 'jpg', 'png', 'gif'])
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # MySQL configurations
 mysql = MySQL(app)
-pp.config['MYSQL_DATABASE_USER'] = 'admin'
+app.config['MYSQL_DATABASE_USER'] = 'admin'
 app.config['MYSQL_DATABASE_PASSWORD'] = '1ns2deout'
 app.config['MYSQL_DATABASE_DB'] = 'database'
 app.config['MYSQL_DATABASE_HOST'] = 'devstack3-dbcluster-xp4up3zn8jhh.cluster-czlpjerozeu2.us-east-1.rds.amazonaws.com'
