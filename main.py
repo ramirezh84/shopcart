@@ -13,22 +13,19 @@ app.config['MYSQL_DATABASE_USER'] = 'admin'
 app.config['MYSQL_DATABASE_PASSWORD'] = '1ns2deout'
 app.config['MYSQL_DATABASE_DB'] = 'database'
 app.config['MYSQL_DATABASE_HOST'] = 'devstack3-dbcluster-xp4up3zn8jhh.cluster-czlpjerozeu2.us-east-1.rds.amazonaws.com'
-mysql.init_app(app)
-
-mysql = MySQL(app)
 
 def getLoginDetails():
     with mysql.connect() as conn:
-        cur = conn.cursor()
+        cur = mysql.get_db().cursor()
         if 'email' not in session:
             loggedIn = False
             firstName = ''
             noOfItems = 0
         else:
             loggedIn = True
-            cur.execute("SELECT userId, firstName FROM users WHERE email = ?", (session['email'], ))
+            cur.execute("SELECT userId, firstName FROM users WHERE email = '" + session['email'] + "'")
             userId, firstName = cur.fetchone()
-            cur.execute("SELECT count(productId) FROM kart WHERE userId = ?", (userId, ))
+            cur.execute("SELECT count(productId) FROM kart WHERE userId = " + str(userId))
             noOfItems = cur.fetchone()[0]
     conn.close()
     return (loggedIn, firstName, noOfItems)
@@ -37,7 +34,7 @@ def getLoginDetails():
 def root():
     loggedIn, firstName, noOfItems = getLoginDetails()
     with mysql.connect() as conn:
-        cur = conn.cursor()
+        cur = mysql.get_db().cursor()
         cur.execute('SELECT productId, name, price, description, image, stock FROM products')
         itemData = cur.fetchall()
         cur.execute('SELECT categoryId, name FROM categories')
@@ -48,7 +45,7 @@ def root():
 @app.route("/add")
 def admin():
     with mysql.connect() as conn:
-        cur = conn.cursor()
+        cur = mysql.get_db().cursor()
         cur.execute("SELECT categoryId, name FROM categories")
         categories = cur.fetchall()
     conn.close()
@@ -71,13 +68,14 @@ def addItem():
         imagename = filename
         with mysql.connect() as conn:
             try:
-                cur = conn.cursor()
-                cur.execute('''INSERT INTO products (name, price, description, image, stock, categoryId) VALUES (?, ?, ?, ?, ?, ?)''', (name, price, description, imagename, stock, categoryId))
-                conn.commit()
+                cur = mysql.get_db().cursor()
+                cur.execute('''INSERT INTO products (name, price, description, image, stock, categoryId) VALUES (%s, %s, %s, %s, %s, %s)''', (name, price, description, imagename, stock, categoryId))
+                mysql.get_db().commit()
                 msg="added successfully"
-            except:
-                msg="error occured"
-                conn.rollback()
+            except Exception as e:
+                traceback.print_exc()
+                mysql.connect().rollback()
+                msg = "Error occured"
         conn.close()
         print(msg)
         return redirect(url_for('root'))
@@ -85,7 +83,7 @@ def addItem():
 @app.route("/remove")
 def remove():
     with mysql.connect() as conn:
-        cur = conn.cursor()
+        cur = mysql.get_db().cursor()
         cur.execute('SELECT productId, name, price, description, image, stock FROM products')
         data = cur.fetchall()
     conn.close()
@@ -96,12 +94,13 @@ def removeItem():
     productId = request.args.get('productId')
     with mysql.connect() as conn:
         try:
-            cur = conn.cursor()
-            cur.execute('DELETE FROM products WHERE productID = ?', (productId, ))
-            conn.commit()
+            cur = mysql.get_db().cursor()
+            cur.execute('DELETE FROM products WHERE productID = ' + productId)
+            mysql.get_db().commit()
             msg = "Deleted successsfully"
-        except:
-            conn.rollback()
+        except Exception as e:
+            traceback.print_exc()
+            mysql.connect().rollback()
             msg = "Error occured"
     conn.close()
     print(msg)
@@ -112,8 +111,8 @@ def displayCategory():
         loggedIn, firstName, noOfItems = getLoginDetails()
         categoryId = request.args.get("categoryId")
         with mysql.connect() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT products.productId, products.name, products.price, products.image, categories.name FROM products, categories WHERE products.categoryId = categories.categoryId AND categories.categoryId = ?", (categoryId, ))
+            cur = mysql.get_db().cursor()
+            cur.execute("SELECT products.productId, products.name, products.price, products.image, categories.name FROM products, categories WHERE products.categoryId = categories.categoryId AND categories.categoryId = " + categoryId)
             data = cur.fetchall()
         conn.close()
         categoryName = data[0][4]
@@ -133,8 +132,8 @@ def editProfile():
         return redirect(url_for('root'))
     loggedIn, firstName, noOfItems = getLoginDetails()
     with mysql.connect() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT userId, email, firstName, lastName, address1, address2, zipcode, city, state, country, phone FROM users WHERE email = ?", (session['email'], ))
+        cur = mysql.get_db().cursor()
+        cur.execute("SELECT userId, email, firstName, lastName, address1, address2, zipcode, city, state, country, phone FROM users WHERE email = '" + session['email'] + "'")
         profileData = cur.fetchone()
     conn.close()
     return render_template("editProfile.html", profileData=profileData, loggedIn=loggedIn, firstName=firstName, noOfItems=noOfItems)
@@ -149,16 +148,17 @@ def changePassword():
         newPassword = request.form['newpassword']
         newPassword = hashlib.md5(newPassword.encode()).hexdigest()
         with mysql.connect() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT userId, password FROM users WHERE email = ?", (session['email'], ))
+            cur = mysql.get_db().cursor()
+            cur.execute("SELECT userId, password FROM users WHERE email = '" + session['email'] + "'")
             userId, password = cur.fetchone()
             if (password == oldPassword):
                 try:
-                    cur.execute("UPDATE users SET password = ? WHERE userId = ?", (newPassword, userId))
-                    conn.commit()
+                    cur.execute("UPDATE users SET password = %s WHERE userId = %s", (newPassword, userId))
+                    mysql.get_db().commit()
                     msg="Changed successfully"
-                except:
-                    conn.rollback()
+                except Exception as e:
+                    traceback.print_exc()
+                    mysql.connect().rollback()
                     msg = "Failed"
                 return render_template("changePassword.html", msg=msg)
             else:
@@ -183,13 +183,13 @@ def updateProfile():
         phone = request.form['phone']
         with mysql.connect() as con:
                 try:
-                    cur = con.cursor()
-                    cur.execute('UPDATE users SET firstName = ?, lastName = ?, address1 = ?, address2 = ?, zipcode = ?, city = ?, state = ?, country = ?, phone = ? WHERE email = ?', (firstName, lastName, address1, address2, zipcode, city, state, country, phone, email))
+                    cur = mysql.get_db().cursor()
+                    cur.execute('UPDATE users SET firstName = %s, lastName = %s, address1 = %s, address2 = %s, zipcode = %s, city = %s, state = %s, country = %s, phone = %s WHERE email = %s', (firstName, lastName, address1, address2, zipcode, city, state, country, phone, email))
 
-                    con.commit()
+                    mysql.get_db().commit()
                     msg = "Saved Successfully"
                 except:
-                    con.rollback()
+                    mysql.connect().rollback()
                     msg = "Error occured"
         con.close()
         return redirect(url_for('editProfile'))
@@ -218,8 +218,8 @@ def productDescription():
     loggedIn, firstName, noOfItems = getLoginDetails()
     productId = request.args.get('productId')
     with mysql.connect() as conn:
-        cur = conn.cursor()
-        cur.execute('SELECT productId, name, price, description, image, stock FROM products WHERE productId = ?', (productId, ))
+        cur = mysql.get_db().cursor()
+        cur.execute('SELECT productId, name, price, description, image, stock FROM products WHERE productId = ' + productId)
         productData = cur.fetchone()
     conn.close()
     return render_template("productDescription.html", data=productData, loggedIn = loggedIn, firstName = firstName, noOfItems = noOfItems)
@@ -231,15 +231,15 @@ def addToCart():
     else:
         productId = int(request.args.get('productId'))
         with mysql.connect() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT userId FROM users WHERE email = ?", (session['email'], ))
+            cur = mysql.get_db().cursor()
+            cur.execute("SELECT userId FROM users WHERE email = '" + session['email'] + "'")
             userId = cur.fetchone()[0]
             try:
-                cur.execute("INSERT INTO kart (userId, productId) VALUES (?, ?)", (userId, productId))
-                conn.commit()
+                cur.execute("INSERT INTO kart (userId, productId) VALUES (%s, %s)", (userId, productId))
+                mysql.get_db().commit()
                 msg = "Added successfully"
             except:
-                conn.rollback()
+                mysql.connect().rollback()
                 msg = "Error occured"
         conn.close()
         return redirect(url_for('root'))
@@ -251,10 +251,10 @@ def cart():
     loggedIn, firstName, noOfItems = getLoginDetails()
     email = session['email']
     with mysql.connect() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT userId FROM users WHERE email = ?", (email, ))
+        cur = mysql.get_db().cursor()
+        cur.execute("SELECT userId FROM users WHERE email = '" + email + "'")
         userId = cur.fetchone()[0]
-        cur.execute("SELECT products.productId, products.name, products.price, products.image FROM products, kart WHERE products.productId = kart.productId AND kart.userId = ?", (userId, ))
+        cur.execute("SELECT products.productId, products.name, products.price, products.image FROM products, kart WHERE products.productId = kart.productId AND kart.userId = " + str(userId))
         products = cur.fetchall()
     totalPrice = 0
     for row in products:
@@ -268,15 +268,15 @@ def removeFromCart():
     email = session['email']
     productId = int(request.args.get('productId'))
     with mysql.connect() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT userId FROM users WHERE email = ?", (email, ))
+        cur = mysql.get_db().cursor()
+        cur.execute("SELECT userId FROM users WHERE email = '" + email + "'")
         userId = cur.fetchone()[0]
         try:
-            cur.execute("DELETE FROM kart WHERE userId = ? AND productId = ?", (userId, productId))
-            conn.commit()
+            cur.execute("DELETE FROM kart WHERE userId = " + str(userId) + " AND productId = " + str(productId))
+            mysql.get_db().commit()
             msg = "removed successfully"
         except:
-            conn.rollback()
+            mysql.connect().rollback()
             msg = "error occured"
     conn.close()
     return redirect(url_for('root'))
@@ -296,6 +296,32 @@ def is_valid(email, password):
             return True
     return False
 
+
+@app.route("/checkout", methods=['GET','POST'])
+def payment():
+    if 'email' not in session:
+        return redirect(url_for('loginForm'))
+    loggedIn, firstName, noOfItems = getLoginDetails()
+    email = session['email']
+
+    with mysql.connect() as conn:
+        cur = mysql.get_db().cursor()
+        cur.execute("SELECT userId FROM users WHERE email = '" + email + "'")
+        userId = cur.fetchone()[0]
+        cur.execute("SELECT products.productId, products.name, products.price, products.image FROM products, kart WHERE products.productId = kart.productId AND kart.userId = " + str(userId))
+        products = cur.fetchall()
+    totalPrice = 0
+    for row in products:
+        totalPrice += row[2]
+        print(row)
+        cur.execute("INSERT INTO orders1 (userId, productId) VALUES (%s, %s)", (userId, row[0]))
+    cur.execute("DELETE FROM kart WHERE userId = " + str(userId))
+    mysql.get_db().commit()
+
+
+
+    return render_template("checkout.html", products = products, totalPrice=totalPrice, loggedIn=loggedIn, firstName=firstName, noOfItems=noOfItems)
+
 @app.route("/register", methods = ['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -312,18 +338,20 @@ def register():
         country = request.form['country']
         phone = request.form['phone']
 
-        with mysql.connect() as con:
+        with mysql.connect() as conn:
             try:
-                cur = con.cursor()
-                cur.execute('INSERT INTO users (password, email, firstName, lastName, address1, address2, zipcode, city, state, country, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', (hashlib.md5(password.encode()).hexdigest(), email, firstName, lastName, address1, address2, zipcode, city, state, country, phone))
+                cur = mysql.get_db().cursor()
+                cur.execute('INSERT INTO users (password, email, firstName, lastName, address1, address2, zipcode, city, state, country, phone) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)', (hashlib.md5(password.encode()).hexdigest(), email, firstName, lastName, address1, address2, zipcode, city, state, country, phone))
 
-                con.commit()
-
+                mysql.get_db().commit()
                 msg = "Registered Successfully"
-            except:
-                con.rollback()
+
+            except Exception as e:
+                traceback.print_exc()
+                mysql.connect().rollback()
                 msg = "Error occured"
-        con.close()
+
+        conn.close()
         return render_template("login.html", error=msg)
 
 @app.route("/registerationForm")
@@ -347,5 +375,5 @@ def parse(data):
         ans.append(curr)
     return ans
 
-if __name__ == '__main__':
-    app.run(host = '0.0.0.0')
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5000)
