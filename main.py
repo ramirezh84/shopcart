@@ -1,14 +1,16 @@
 from flask import *
+import sqlite3, hashlib, os
 from flaskext.mysql import MySQL
-import mysql, hashlib, os
 from werkzeug.utils import secure_filename
+import traceback
 
 app = Flask(__name__)
 app.secret_key = 'random string'
 UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_EXTENSIONS = set(['jpeg', 'jpg', 'png', 'gif'])
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
+# MySQL configurations
+mysql = MySQL(app)
 app.config['MYSQL_DATABASE_USER'] = 'admin'
 app.config['MYSQL_DATABASE_PASSWORD'] = '1ns2deout'
 app.config['MYSQL_DATABASE_DB'] = 'database'
